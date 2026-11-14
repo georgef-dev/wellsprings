@@ -140,6 +140,11 @@ export default function App() {
   const [fetching, setFetching] = useState(false)
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState(null)
+  const [cols, setCols] = useState(() => {
+    const v = localStorage.getItem('feeds.cols')
+    return ['1', '2', '3', '4'].includes(v) ? v : 'auto'
+  })
+  const [autoCols, setAutoCols] = useState(1)
 
   const listRef = useRef(null)
   const contentCache = useRef(new Map())
@@ -156,6 +161,24 @@ export default function App() {
   scopeRef.current = scope
   const unreadOnlyRef = useRef(unreadOnly)
   unreadOnlyRef.current = unreadOnly
+
+  useEffect(() => {
+    localStorage.setItem('feeds.cols', cols)
+  }, [cols])
+
+  // Auto column count follows the width of the list area.
+  useEffect(() => {
+    const el = listRef.current
+    if (!el) return
+    const compute = () => {
+      const w = el.clientWidth
+      setAutoCols(w >= 2100 ? 4 : w >= 1400 ? 3 : w >= 860 ? 2 : 1)
+    }
+    compute()
+    const ro = new ResizeObserver(compute)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
 
   // Theme follows the current Omarchy theme (colors.toml).
   useEffect(() => {
@@ -377,6 +400,8 @@ export default function App() {
     return () => window.removeEventListener('keydown', handler)
   }, [move, open, markRead, star])
 
+  const effectiveCols = article ? 1 : cols === 'auto' ? autoCols : Number(cols)
+
   return (
     <div id="app" className={article ? 'with-article' : ''}>
       <Sidebar feeds={feeds} scope={scope} onSelect={setScope} />
@@ -384,6 +409,13 @@ export default function App() {
         <header className="list-head">
           <h2>{scope.label}</h2>
           <div className="tools">
+            <div className="seg" title="Columns (A = auto, scales with screen width)">
+              {['auto', '1', '2', '3', '4'].map((v) => (
+                <button key={v} className={`seg-btn${cols === v ? ' on' : ''}`} onClick={() => setCols(v)}>
+                  {v === 'auto' ? 'A' : v}
+                </button>
+              ))}
+            </div>
             <button className={unreadOnly ? 'toggle on' : 'toggle'} onClick={() => setUnreadOnly((v) => !v)}>
               unread
             </button>
@@ -393,7 +425,7 @@ export default function App() {
           </div>
         </header>
         {error && <div className="error">{error}</div>}
-        <div className="items" ref={listRef}>
+        <div className={`items${effectiveCols > 1 ? ` cols-${effectiveCols}` : ''}`} ref={listRef}>
           {items.map((item) => (
             <Card key={item._id} item={item} selected={item._id === selectedId} onOpen={open} onStar={star} />
           ))}

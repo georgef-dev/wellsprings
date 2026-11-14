@@ -200,10 +200,68 @@ body {
   cursor: default;
 }
 
+.seg {
+  display: flex;
+  border: 1px solid color-mix(in srgb, var(--bg-raised) 80%, transparent);
+  border-radius: 999px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.seg-btn {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11px;
+  padding: 4px 9px;
+  cursor: pointer;
+}
+
+.seg-btn:hover {
+  color: var(--fg);
+}
+
+.seg-btn.on {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
 .items {
   overflow-y: auto;
   flex: 1;
   padding: 8px;
+}
+
+.items.cols-2,
+.items.cols-3,
+.items.cols-4 {
+  display: grid;
+  align-items: start;
+  align-content: start;
+  gap: 8px;
+}
+
+.items.cols-2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.items.cols-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.items.cols-4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.items[class*='cols-'] .card,
+.items[class*='cols-'] .empty {
+  margin-bottom: 0;
+}
+
+.items[class*='cols-'] .more {
+  grid-column: 1 / -1;
+  margin: 4px auto;
 }
 
 .card {
