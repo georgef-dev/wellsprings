@@ -240,6 +240,11 @@ body {
   align-items: start;
   align-content: start;
   gap: 8px;
+  /* Auto row sizing can go stale in Chromium when tracks are sized mid-load
+     or mid-resize (rows frozen at ~22px while cards are 100-275px tall,
+     causing cards to paint over each other). max-content forces the engine
+     to re-measure item heights on every layout pass. */
+  grid-auto-rows: max-content;
 }
 
 .items.cols-2 {
