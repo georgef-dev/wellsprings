@@ -1,78 +1,153 @@
 <p align="center">
-  <img src="design/icon.svg" alt="Wellsprings" width="110" />
+  <img src="design/icon.svg" alt="Wellsprings wave and droplet logo" width="112" />
 </p>
 
 <h1 align="center">Wellsprings</h1>
 
 <p align="center">
-  A keyboard-driven RSS reader for the Linux desktop.<br>
-  Feeds are springs. Groups are streams. Everything is local.
+  <strong>Your feeds. Your pace. Your desktop.</strong><br>
+  A local-first RSS and Atom reader for Linux, built for the keyboard.
 </p>
 
 <p align="center">
-  <img src="docs/screenshot.png" alt="Wellsprings" width="860" />
+  <a href="#why-wellsprings">Features</a> ·
+  <a href="#getting-started">Get started</a> ·
+  <a href="#keyboard-navigation">Keyboard guide</a> ·
+  <a href="#roadmap">Roadmap</a>
 </p>
 
-## Why
+<p align="center">
+  <img src="docs/screenshot.png" alt="Wellsprings with a feed sidebar, streams, and a multi-column article grid" width="1000" />
+</p>
 
-Wellsprings is a local-first feed reader built on Rust and Tauri. No accounts,
-no cloud, no telemetry. Your feeds and articles live in a SQLite database on
-your machine, and a background loop keeps them fresh while the app sits quietly
-in your tray.
+## Why Wellsprings?
 
-- **Keyboard driven**: hjkl moves across the article grid, plus o, m, s, u, r
-  for open, mark read, star, unread only, and refresh. The mouse is optional.
-- **Full-text search**: press `/`, type, done. FTS5 across titles, snippets,
-  authors, and bodies, ranked by relevance, newest first.
-- **Streams**: bundle feeds into streams, drag and drop to reorder them right
-  in the sidebar, or reorganize everything in the settings sheet.
-- **OPML**: export every feed and stream to `~/Downloads/wellsprings.opml`, or
-  merge an OPML file back in. Imports are idempotent, matched by feed URL.
-- **Background fetching**: a fetch loop runs on a configurable interval
-  (default 30 minutes) even with the window closed.
-- **Close to tray**: closing the window hides it. Fetching never stops.
-- **Live theming**: follows Omarchy theme changes within seconds. On other
-  desktops it falls back to a fixed Dracula look.
-- **Dedupe**: items are keyed by guid and raw link, so a feed that changes its
-  URL scheme midstream does not double post.
+Keep up with the sites you choose, without another account or a hosted backend.
+Wellsprings stores your feeds, articles, and reading state in a local SQLite
+database. Open it, catch up, and get back to your day.
 
-## Keys
+| | |
+| :--- | :--- |
+| **Stay on the keyboard** | Move through the article grid and sidebar with `hjkl` or arrow keys. Open, read, star, and search without reaching for the mouse. |
+| **Find that article** | Search titles, snippets, authors, and article bodies with SQLite FTS5. Results are ranked by relevance, with newer articles breaking ties. |
+| **Organize into streams** | Group related feeds, drag streams into the order you want, and manage subscriptions in settings. |
+| **Bring your feeds** | Import an OPML subscription list or export yours. Re-importing the same file doesn't duplicate feeds. |
+| **Let it fetch** | Fetches every 30 minutes by default, with a configurable interval. Closing the window sends it to the tray instead of stopping the app. |
+| **Match your desktop** | Follows [Omarchy](https://omarchy.org/) theme changes live. Other desktops use the built-in Dracula palette. |
+
+Rust handles fetching and storage. Tauri provides the desktop window and tray.
+React renders the reader. No separate server process is needed to run the desktop app.
+
+## Getting started
+
+> [!NOTE]
+> Wellsprings is in early development, with Linux as the current target.
+> These instructions build it from source. macOS builds are on the roadmap.
+
+### Build and run
+
+You'll need:
+
+- **Rust**, installed through [rustup](https://rustup.rs/).
+- **Node.js 22.12 or newer** and npm.
+- **Tauri's Linux system dependencies**, including WebKitGTK 4.1.
+  Follow the [prerequisites for your distribution](https://v2.tauri.app/start/prerequisites/#linux).
+
+```bash
+git clone https://github.com/georgef-dev/wellsprings.git
+cd wellsprings
+npm ci
+npm run tauri dev
+```
+
+To build a release binary and a Debian package:
+
+```bash
+npm run tauri build
+```
+
+Build output is under `src-tauri/target/release/`, with the `.deb` in
+`src-tauri/target/release/bundle/deb/`.
+
+### Make it yours
+
+1. Open **settings** and add a feed URL, or import an OPML file.
+2. Create **streams** for topics you follow and assign feeds to them.
+3. Pick a column count, or leave it on **A** to adapt to the window width.
+4. Press `/` to search, or start moving with `hjkl`.
+
+Closing the window keeps Wellsprings running in the tray. Use the tray menu to
+reopen it, fetch immediately, or **Quit** the app.
+
+## Keyboard navigation
+
+### Read and browse
 
 | Key | Action |
 | --- | --- |
-| `j` / `k` | move down / up |
-| `h` / `l` | move left / right |
-| `/` | focus search (`Esc` clears it) |
-| `o` or `Enter` | open article |
-| `m` | toggle read |
-| `s` | star |
-| `u` | unread only |
-| `r` | refresh |
-| `Esc` | close article |
+| `j` / `k` or `↓` / `↑` | Move down / up |
+| `h` / `l` or `←` / `→` | Move left / right |
+| `o` or `Enter` | Open the selected article in the reading pane |
+| `m` | Toggle read / unread |
+| `s` | Toggle star |
+| `u` | Toggle the unread-only filter |
+| `r` | Fetch feeds now |
+| `/` | Focus search |
+| `Esc` | Close the article, or clear and leave the search field |
 
-## Build
+### Move between panes
 
-Requirements: Rust (rustup), Node 20+, and the
-[Tauri Linux prerequisites](https://tauri.app/start/prerequisites/)
-(webkit2gtk 4.1 and friends).
+Press `h` at the grid's left edge to enter the sidebar. The focused row gets an
+accent outline; moving between rows doesn't change your feed selection.
 
-```bash
-npm install
-npm run tauri dev      # run it
-npm run tauri build    # package a .deb
+| Key in the sidebar | Action |
+| --- | --- |
+| `j` / `k` or `↓` / `↑` | Move between feeds and streams |
+| `h` or `←` | Jump to the parent stream, then **All feeds** |
+| `o`, `Enter`, or `Space` | Select the focused feed or stream |
+| `l`, `→`, or `Esc` | Return to the article grid |
+
+**Try it:** `h` to the sidebar, `j` to a stream, `Enter` to select it, `l` back to
+the grid. Your hands stay where they are.
+
+## Your feeds and data
+
+**Subscriptions travel with you.** In settings, export your feed list to
+`~/Downloads/wellsprings.opml`, or import an OPML file from another reader.
+Imports match feeds by URL and preserve existing stream assignments. New feeds
+are fetched on the next cycle, or immediately when you press `r`.
+Nested folders are flattened into their top-level stream.
+
+Export replaces the previous `wellsprings.opml` file. OPML contains subscriptions,
+not saved articles or read state.
+
+**Your library stays local.** On Linux, the default database location is:
+
+```text
+~/.local/share/com.georgeferreira.wellsprings/wellsprings.db
 ```
 
-On first run Wellsprings creates its database at
-`~/.local/share/com.georgeferreira.wellsprings/wellsprings.db` and starts
-fetching any feeds you add in settings.
+Wellsprings doesn't require an account or send telemetry. It connects to feed
+servers to fetch content, and article images and feed icons can load from remote sites.
+
+Coming from Fluent Reader? The repository includes a
+[one-time migration script](scripts/import-fluent.mjs) for its local database.
+It's a developer utility with local path assumptions, not an in-app import wizard.
+Read the script's instructions before using it against your library.
 
 ## Roadmap
 
-- [x] Search over titles, snippets, authors, and content (FTS5)
+- [x] Keyboard navigation across the grid and sidebar
+- [x] Full-text search
 - [x] OPML import and export
-- [x] One-time import from Fluent Reader (`scripts/import-fluent.mjs`)
+- [x] Fluent Reader migration utility
 - [ ] macOS builds
+
+## Feedback
+
+Found a bug or have an idea? [Open an issue](https://github.com/georgef-dev/wellsprings/issues).
+For bugs, include your Linux distribution, desktop environment, and steps to reproduce.
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+[MIT](LICENSE) © 2026 George Ferreira.
