@@ -1,54 +1,73 @@
-# feeds
+<p align="center">
+  <img src="design/icon.svg" alt="Wellsprings" width="110" />
+</p>
 
-A fast, keyboard-driven RSS reader web UI that reads the Fluent Reader SQLite
-database directly (`~/.config/fluent-reader/fluent-reader.db`), same schema,
-same feeds. It owns fetching, so the Fluent Reader app itself is optional.
+<h1 align="center">Wellsprings</h1>
 
-## Run
+<p align="center">
+  A keyboard-driven RSS reader for the Linux desktop.<br>
+  Feeds are springs. Groups are streams. Everything is local.
+</p>
 
-The server runs as a systemd user service:
+<p align="center">
+  <img src="docs/screenshot.png" alt="Wellsprings" width="860" />
+</p>
 
-```bash
-systemctl --user status feeds        # check it
-systemctl --user restart feeds       # restart after code changes
-journalctl --user -u feeds -f        # follow logs
-```
+## Why
 
-Open the UI: `chromium --app=http://127.0.0.1:8787`, or launch **Feeds** from
-the app launcher.
+Wellsprings is a local-first feed reader built on Rust and Tauri. No accounts,
+no cloud, no telemetry. Your feeds and articles live in a SQLite database on
+your machine, and a background loop keeps them fresh while the app sits quietly
+in your tray.
 
-Dev loop: `npm run dev` (vite on :5173, proxies /api to :8787), then
-`npm run build` to refresh the served UI.
-
-## What it does
-
-- Server (Node 26 + `node:sqlite`, Fastify, port 8787):
-  - API: feeds/groups with unread counts, paged items, item content,
-    PATCH read/starred, manual fetch trigger.
-  - Fetcher: pulls all sources every 30 min (reads `fetchInterval` from
-    Fluent Reader's config.json), dedupes on guid-or-link inside an
-    immediate transaction.
-  - Theme: parses the current Omarchy theme's `colors.toml` into CSS
-    variables, so the UI follows your theme.
-- UI (React + Vite): sidebar with groups, magazine list with thumbnails,
-  article pane with sanitized HTML (DOMPurify).
+- **Keyboard driven**: hjkl moves across the article grid, plus o, m, s, u, r
+  for open, mark read, star, unread only, and refresh. The mouse is optional.
+- **Streams**: bundle feeds into streams, drag and drop to reorder them right
+  in the sidebar, or reorganize everything in the settings sheet.
+- **Background fetching**: a fetch loop runs on a configurable interval
+  (default 30 minutes) even with the window closed.
+- **Close to tray**: closing the window hides it. Fetching never stops.
+- **Live theming**: follows Omarchy theme changes within seconds. On other
+  desktops it falls back to a fixed Dracula look.
+- **Dedupe**: items are keyed by guid and raw link, so a feed that changes its
+  URL scheme midstream does not double post.
 
 ## Keys
 
-| key | action |
+| Key | Action |
 | --- | --- |
-| `j` / `k` (or arrows) | next / previous item |
-| `o` / `enter` | open article (marks read) |
+| `j` / `k` | move down / up |
+| `h` / `l` | move left / right |
+| `o` or `Enter` | open article |
 | `m` | toggle read |
 | `s` | star |
-| `u` | toggle unread-only |
-| `r` | fetch now |
-| `esc` | close article |
+| `u` | unread only |
+| `r` | refresh |
+| `Esc` | close article |
 
-## Notes
+## Build
 
-- Fluent Reader fetches only while its app is open. Either app can fetch;
-  both write to the same DB with guarded inserts, so nothing duplicates.
-  Reading in both UIs at once is fine but unnecessary.
-- Backups of the original db/config live in
-  `~/.config/fluent-reader/backup-pre-feeds-*`.
+Requirements: Rust (rustup), Node 20+, and the
+[Tauri Linux prerequisites](https://tauri.app/start/prerequisites/)
+(webkit2gtk 4.1 and friends).
+
+```bash
+npm install
+npm run tauri dev      # run it
+npm run tauri build    # package a .deb
+```
+
+On first run Wellsprings creates its database at
+`~/.local/share/com.georgeferreira.wellsprings/wellsprings.db` and starts
+fetching any feeds you add in settings.
+
+## Roadmap
+
+- [ ] Search over titles and content (the FTS5 schema is already in place)
+- [ ] OPML import and export
+- [ ] One time import from Fluent Reader
+- [ ] macOS builds
+
+## License
+
+MIT. See [LICENSE](LICENSE).

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/" xmlns:dc="http://purl.org/dc/elements/1.1/">
+<channel>
+  <title>RSS Test</title>
+  <link>https://example.com/</link>
+  <item>
+    <guid isPermaLink="false">rss-item-1</guid>
+    <title>RSS Entry One</title>
+    <link>https://example.com/rss-1</link>
+    <pubDate>Fri, 13 Nov 2026 08:00:00 GMT</pubDate>
+    <dc:creator>John Smith</dc:creator>
+    <description>&lt;p&gt;Body &lt;a href="https://example.com/x"&gt;link&lt;/a&gt; text&lt;/p&gt;</description>
+    <media:thumbnail url="https://example.com/thumb1.jpg"/>
+  </item>
+</channel>
+</rss>

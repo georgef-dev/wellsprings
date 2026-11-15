@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import DOMPurify from 'dompurify'
-import { getFeeds, getItems, getItem, patchItem, getTheme, triggerFetch } from './api'
+import { listen } from '@tauri-apps/api/event'
+import { getFeeds, getItems, getItem, patchItem, getTheme, triggerFetch, reorderGroups } from './api'
+import Settings from './Settings'
 
 const PAGE = 50
 
@@ -31,19 +33,45 @@ function FeedRow({ label, icon, unread, active, indent, onClick }) {
   )
 }
 
-function Sidebar({ feeds, scope, onSelect }) {
+function Sidebar({ feeds, scope, onSelect, onReorder }) {
+  const [dragGid, setDragGid] = useState(null)
+  const [dropBefore, setDropBefore] = useState(null)
   if (!feeds) return <nav className="sidebar" />
+  const dragHandlers = (gid, index) => ({
+    draggable: true,
+    onDragStart: (e) => {
+      setDragGid(gid)
+      e.dataTransfer.effectAllowed = 'move'
+      e.dataTransfer.setData('text/plain', String(gid))
+    },
+    onDragEnd: () => {
+      setDragGid(null)
+      setDropBefore(null)
+    },
+    onDragOver: (e) => {
+      if (dragGid == null || dragGid === gid) return
+      e.preventDefault()
+      setDropBefore(gid)
+    },
+    onDrop: (e) => {
+      e.preventDefault()
+      if (dragGid != null && dragGid !== gid) onReorder(dragGid, gid)
+      setDragGid(null)
+      setDropBefore(null)
+    },
+    'data-index': index,
+  })
   return (
     <nav className="sidebar">
-      <div className="brand">feeds</div>
+      <div className="brand">wellsprings</div>
       <FeedRow
         label="All feeds"
         unread={feeds.totalUnread}
         active={scope.type === 'all'}
         onClick={() => onSelect({ type: 'all', id: null, label: 'All feeds' })}
       />
-      {feeds.groups.map((g) => (
-        <div key={'g' + g.gid} className="group">
+      {feeds.groups.map((g, i) => (
+        <div key={'g' + g.gid} className={`group${dragGid === g.gid ? ' dragging' : ''}${dropBefore === g.gid ? ' drop-before' : ''}`} {...dragHandlers(g.gid, i)}>
           <FeedRow
             label={g.name}
             unread={g.unread}
@@ -66,6 +94,18 @@ function Sidebar({ feeds, scope, onSelect }) {
           })}
         </div>
       ))}
+      {dragGid != null && (
+        <div
+          className="drop-end"
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => {
+            e.preventDefault()
+            onReorder(dragGid, null)
+            setDragGid(null)
+            setDropBefore(null)
+          }}
+        />
+      )}
       {feeds.loose.length > 0 && (
         <div className="group">
           <div className="group-title">Feeds</div>
@@ -82,7 +122,7 @@ function Sidebar({ feeds, scope, onSelect }) {
           ))}
         </div>
       )}
-      <footer className="hints">j/k move · o open · m read · s star · u unread · r fetch</footer>
+      <footer className="hints">hjkl move · o open · m read · s star · u unread · r fetch</footer>
     </nav>
   )
 }
@@ -149,6 +189,8 @@ export default function App() {
   const listRef = useRef(null)
   const contentCache = useRef(new Map())
 
+  const feedsRef = useRef(feeds)
+  feedsRef.current = feeds
   const itemsRef = useRef(items)
   itemsRef.current = items
   const selectedRef = useRef(selectedId)
@@ -180,14 +222,17 @@ export default function App() {
     return () => ro.disconnect()
   }, [])
 
-  // Theme follows the current Omarchy theme (colors.toml).
+  // Theme follows the current Omarchy theme (colors.toml), re-applied live
+  // when `omarchy theme set` changes it.
   useEffect(() => {
-    getTheme()
-      .then(({ vars }) => {
-        const root = document.documentElement
-        for (const [k, v] of Object.entries(vars)) root.style.setProperty(k, v)
-      })
-      .catch(() => {})
+    const apply = (t) => {
+      const root = document.documentElement
+      for (const [k, v] of Object.entries(t.vars)) root.style.setProperty(k, v)
+    }
+    getTheme().then(apply).catch(() => {})
+    let unlisten
+    listen('theme-changed', (e) => apply(e.payload)).then((u) => { unlisten = u })
+    return () => { if (unlisten) unlisten() }
   }, [])
 
   const findItem = (id) =>
@@ -298,8 +343,11 @@ export default function App() {
   const loadMoreRef = useRef(loadMore)
   loadMoreRef.current = loadMore
 
-  const move = useCallback(
-    (delta) => {
+  // Spatial grid navigation: h/j/k/l move between cards left/down/up/right
+  // following the row-major card grid. Edges stay put; moving down past the
+  // loaded items still triggers load-more and retries.
+  const gridMove = useCallback(
+    (dir) => {
       const list = itemsRef.current
       if (!list.length) return
       const idx = list.findIndex((i) => i._id === selectedRef.current)
@@ -308,19 +356,25 @@ export default function App() {
         if (articleRef.current) loadArticle(list[0]._id)
         return
       }
-      let next = idx + delta
+      const n = articleRef.current ? 1 : (cols === 'auto' ? autoCols : Number(cols)) || 1
+      const col = idx % n
+      let next = null
+      if (dir === 'left' && col > 0) next = idx - 1
+      else if (dir === 'right' && col < n - 1) next = idx + 1
+      else if (dir === 'up' && idx >= n) next = idx - n
+      else if (dir === 'down') next = idx + n
+      if (next == null) return // edge: stay put
       if (next >= list.length) {
         if (hasMoreRef.current) {
-          loadMoreRef.current(() => move(delta))
+          loadMoreRef.current(() => gridMove(dir))
           return
         }
-        next = list.length - 1
+        return // bottom edge: stay put
       }
-      if (next < 0) next = 0
       select(list[next]._id)
       if (articleRef.current) loadArticle(list[next]._id)
     },
-    [select, loadArticle]
+    [cols, autoCols, select, loadArticle]
   )
 
   const open = useCallback(
@@ -347,21 +401,69 @@ export default function App() {
   const refreshRef = useRef(refresh)
   refreshRef.current = refresh
 
+  // After settings mutations: refresh the sidebar, and if the change removed
+  // the feed the current scope points at, fall back to all feeds.
+  const reloadAfterSettings = useCallback(
+    (removedSid) => {
+      loadFeeds()
+      const s = scopeRef.current
+      if (removedSid != null && s?.type === 'source' && s.id === removedSid) {
+        setScope({ type: 'all', id: null, label: 'All feeds' })
+      } else {
+        loadItems()
+      }
+    },
+    [loadFeeds, loadItems]
+  )
+
+  // Sidebar group order: optimistic repaint, persist, then resync from the DB.
+  const applyGroupOrder = useCallback(
+    (fromGid, beforeGid) => {
+      const f = feedsRef.current
+      if (!f || fromGid == null) return
+      const rest = f.groups.map((g) => g.gid).filter((id) => id !== fromGid)
+      const idx = beforeGid == null ? rest.length : rest.indexOf(beforeGid)
+      if (idx === -1) return
+      rest.splice(idx, 0, fromGid)
+      setFeeds({ ...f, groups: rest.map((id) => f.groups.find((g) => g.gid === id)) })
+      reorderGroups(rest).then(loadFeeds).catch(loadFeeds)
+    },
+    [loadFeeds]
+  )
+
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const settingsRef = useRef(settingsOpen)
+  settingsRef.current = settingsOpen
+
   useEffect(() => {
     const handler = (e) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return
       const tag = e.target?.tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA') return
+      if (settingsRef.current) {
+        if (e.key === 'Escape') setSettingsOpen(false)
+        return
+      }
       switch (e.key) {
         case 'j':
         case 'ArrowDown':
           e.preventDefault()
-          move(1)
+          gridMove('down')
           break
         case 'k':
         case 'ArrowUp':
           e.preventDefault()
-          move(-1)
+          gridMove('up')
+          break
+        case 'h':
+        case 'ArrowLeft':
+          e.preventDefault()
+          gridMove('left')
+          break
+        case 'l':
+        case 'ArrowRight':
+          e.preventDefault()
+          gridMove('right')
           break
         case 'o':
           open(selectedRef.current)
@@ -398,13 +500,13 @@ export default function App() {
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [move, open, markRead, star])
+  }, [gridMove, open, markRead, star])
 
   const effectiveCols = article ? 1 : cols === 'auto' ? autoCols : Number(cols)
 
   return (
     <div id="app" className={article ? 'with-article' : ''}>
-      <Sidebar feeds={feeds} scope={scope} onSelect={setScope} />
+      <Sidebar feeds={feeds} scope={scope} onSelect={setScope} onReorder={applyGroupOrder} />
       <section className="list-pane">
         <header className="list-head">
           <h2>{scope.label}</h2>
@@ -421,6 +523,9 @@ export default function App() {
             </button>
             <button className="toggle" onClick={() => refreshRef.current()} disabled={fetching}>
               {fetching ? 'fetching…' : 'fetch'}
+            </button>
+            <button className="toggle" onClick={() => setSettingsOpen(true)}>
+              settings
             </button>
           </div>
         </header>
@@ -475,6 +580,14 @@ export default function App() {
             </>
           )}
         </aside>
+      )}
+      {settingsOpen && (
+        <Settings
+          feeds={feeds}
+          onClose={() => setSettingsOpen(false)}
+          onChanged={reloadAfterSettings}
+          onReorder={applyGroupOrder}
+        />
       )}
     </div>
   )

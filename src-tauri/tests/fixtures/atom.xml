@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:media="http://search.yahoo.com/mrss/">
+  <title>Atom Test</title>
+  <id>urn:uuid:atom-test</id>
+  <updated>2026-11-13T10:00:00Z</updated>
+  <entry>
+    <id>urn:uuid:item-1</id>
+    <title>Atom Entry One</title>
+    <link rel="alternate" href="https://example.com/atom-1"/>
+    <updated>2026-11-13T09:30:00Z</updated>
+    <author><name>Jane Doe</name></author>
+    <content type="html">&lt;p&gt;Hello &lt;b&gt;world&lt;/b&gt;&lt;/p&gt;</content>
+    <media:content url="https://example.com/img/one.jpg" type="image/jpeg" medium="image"/>
+  </entry>
+</feed>

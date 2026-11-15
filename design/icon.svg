@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1d1f40"/>
+      <stop offset="1" stop-color="#10122a"/>
+    </linearGradient>
+    <linearGradient id="water" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f4ffff"/>
+      <stop offset="1" stop-color="#7fd6ff"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="200" fill="url(#bg)"/>
+
+  <!-- droplet -->
+  <path d="M512 208
+           C 492 246, 466 266, 466 300
+           A 46 46 0 0 0 558 300
+           C 558 266, 532 246, 512 208 Z"
+        fill="url(#water)"/>
+
+  <!-- double-u: the W as a smooth wave -->
+  <path d="M246 348
+           C 296 620, 336 700, 396 700
+           C 452 700, 468 430, 512 430
+           C 556 430, 572 700, 628 700
+           C 688 700, 728 620, 778 348"
+        fill="none" stroke="url(#water)" stroke-width="64"
+        stroke-linecap="round"/>
+
+  <!-- ripples below -->
+  <path d="M332 812 Q 512 916 692 812" fill="none" stroke="#8fdcff" stroke-width="28" stroke-linecap="round"/>
+  <path d="M182 890 Q 512 1058 842 890" fill="none" stroke="#8fdcff" stroke-width="18" stroke-linecap="round" opacity="0.45"/>
+</svg>
