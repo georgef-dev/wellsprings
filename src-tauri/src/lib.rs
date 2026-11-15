@@ -2,6 +2,7 @@ mod commands;
 mod db;
 mod fetch;
 mod models;
+mod opml;
 mod theme;
 
 use std::sync::Mutex;
@@ -90,6 +91,7 @@ pub fn run() {
             commands::get_item,
             commands::set_read,
             commands::set_starred,
+            commands::search,
             commands::get_theme,
             commands::fetch_now,
             commands::get_settings,
@@ -101,7 +103,9 @@ pub fn run() {
             commands::set_source_group,
             commands::rename_source,
             commands::remove_source,
-            commands::add_source
+            commands::add_source,
+            commands::export_opml,
+            commands::import_opml
         ])
         .on_window_event(|window, event| {
             // Close-to-tray: the fetch loop lives in this process.

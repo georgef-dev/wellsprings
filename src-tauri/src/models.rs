@@ -94,6 +94,23 @@ pub struct FetchResult {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct OpmlExportInfo {
+    pub path: String,
+    pub feeds: usize,
+    pub streams: usize,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpmlImportInfo {
+    pub feeds_found: usize,
+    pub feeds_added: usize,
+    pub streams_created: usize,
+    pub streams_assigned: usize,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ThemePayload {
     pub name: Option<String>,
     pub vars: std::collections::HashMap<String, String>,

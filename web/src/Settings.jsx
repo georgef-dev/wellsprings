@@ -9,6 +9,8 @@ import {
   renameSource,
   removeSource,
   addSource,
+  exportOpml,
+  importOpml,
 } from './api'
 
 // Settings sheet: fetch interval, groups, and feed management. Mutations call
@@ -65,6 +67,38 @@ export default function Settings({ feeds, onClose, onChanged, onReorder }) {
       kind === 'feed' ? () => renameSource(id, name) : () => renameGroup(id, name),
       ''
     )
+  }
+
+  const doExport = async () => {
+    setBusy(true)
+    setStatus(null)
+    try {
+      const info = await exportOpml()
+      setStatus({ text: `Wrote ${info.path}` })
+    } catch (err) {
+      setStatus({ text: String(err.message || err), err: true })
+    }
+    setBusy(false)
+  }
+
+  const onImportFile = async (e) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setBusy(true)
+    setStatus(null)
+    try {
+      const info = await importOpml(await file.text())
+      const bits = []
+      if (info.feedsAdded) bits.push(`${info.feedsAdded} new feed${info.feedsAdded === 1 ? '' : 's'}`)
+      if (info.streamsCreated) bits.push(`${info.streamsCreated} new stream${info.streamsCreated === 1 ? '' : 's'}`)
+      if (info.streamsAssigned) bits.push(`${info.streamsAssigned} feed${info.streamsAssigned === 1 ? '' : 's'} grouped`)
+      setStatus({ text: bits.length ? `Import: ${bits.join(', ')}` : 'Import: nothing new' })
+      onChanged()
+    } catch (err) {
+      setStatus({ text: String(err.message || err), err: true })
+    }
+    setBusy(false)
   }
 
   const NameCell = ({ kind, id, name }) =>
@@ -237,6 +271,27 @@ export default function Settings({ feeds, onClose, onChanged, onReorder }) {
           >
             add
           </button>
+        </div>
+
+        <h3>OPML</h3>
+        <div className="srow">
+          <button className="toggle" disabled={busy} onClick={doExport}>
+            export
+          </button>
+          <label className="toggle" title="Merge feeds and streams from an .opml file">
+            import
+            <input
+              type="file"
+              accept=".opml,.xml,text/xml,application/xml,text/plain"
+              disabled={busy}
+              hidden
+              onChange={onImportFile}
+            />
+          </label>
+        </div>
+        <div className="hint">
+          Export writes every feed and stream to ~/Downloads/wellsprings.opml. Import merges by URL: existing feeds
+          stay untouched, ungrouped feeds join the file's streams, new feeds fetch on the next cycle.
         </div>
 
         <div className={`status${status?.err ? ' err' : ''}`}>{status?.text}</div>

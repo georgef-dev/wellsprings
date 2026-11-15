@@ -1,8 +1,10 @@
 use tauri::{AppHandle, Manager, State};
 
 use crate::db;
-use crate::models::{FeedsPayload, FetchResult, ItemDetail, ItemsPayload, Scope, ThemePayload};
-use crate::{fetch, theme, AppState};
+use crate::models::{
+    FeedsPayload, FetchResult, ItemDetail, ItemsPayload, OpmlExportInfo, OpmlImportInfo, Scope, ThemePayload,
+};
+use crate::{fetch, opml, theme, AppState};
 
 #[tauri::command]
 pub fn list_feeds(state: State<'_, AppState>) -> Result<FeedsPayload, String> {
@@ -123,10 +125,31 @@ pub async fn add_source(app: AppHandle, url: String, gid: Option<i64>) -> Result
     if db::source_url_exists(&conn, &url).map_err(|e| e.to_string())? {
         return Err("Feed already added".into());
     }
-    let sid = db::add_source(&conn, &url, &name, None).map_err(|e| e.to_string())?;
+    let sid = db::add_source(&conn, &url, &name, None, None).map_err(|e| e.to_string())?;
     if let Some(gid) = gid {
         db::set_source_group(&conn, sid, Some(gid)).map_err(|e| e.to_string())?;
     }
     db::store_entries(&conn, sid, &entries).map_err(|e| e.to_string())?;
     Ok(sid)
+}
+
+#[tauri::command]
+pub fn search(state: State<'_, AppState>, query: String, limit: Option<u32>) -> Result<ItemsPayload, String> {
+    let conn = state.db.lock().map_err(|_| "db lock poisoned".to_string())?;
+    db::search(&conn, &query, limit.unwrap_or(60)).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn export_opml(state: State<'_, AppState>) -> Result<OpmlExportInfo, String> {
+    let conn = state.db.lock().map_err(|_| "db lock poisoned".to_string())?;
+    opml::export_to_file(&conn)
+}
+
+/// Merges an OPML document into the library. Existing feeds are matched by URL
+/// and left alone; ungrouped feeds join the file's streams; missing feeds are
+/// added with no entries until the next fetch cycle.
+#[tauri::command]
+pub fn import_opml(state: State<'_, AppState>, text: String) -> Result<OpmlImportInfo, String> {
+    let mut conn = state.db.lock().map_err(|_| "db lock poisoned".to_string())?;
+    opml::import(&mut conn, &text)
 }

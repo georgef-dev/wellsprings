@@ -22,8 +22,12 @@ in your tray.
 
 - **Keyboard driven**: hjkl moves across the article grid, plus o, m, s, u, r
   for open, mark read, star, unread only, and refresh. The mouse is optional.
+- **Full-text search**: press `/`, type, done. FTS5 across titles, snippets,
+  authors, and bodies, ranked by relevance, newest first.
 - **Streams**: bundle feeds into streams, drag and drop to reorder them right
   in the sidebar, or reorganize everything in the settings sheet.
+- **OPML**: export every feed and stream to `~/Downloads/wellsprings.opml`, or
+  merge an OPML file back in. Imports are idempotent, matched by feed URL.
 - **Background fetching**: a fetch loop runs on a configurable interval
   (default 30 minutes) even with the window closed.
 - **Close to tray**: closing the window hides it. Fetching never stops.
@@ -38,6 +42,7 @@ in your tray.
 | --- | --- |
 | `j` / `k` | move down / up |
 | `h` / `l` | move left / right |
+| `/` | focus search (`Esc` clears it) |
 | `o` or `Enter` | open article |
 | `m` | toggle read |
 | `s` | star |
@@ -63,9 +68,9 @@ fetching any feeds you add in settings.
 
 ## Roadmap
 
-- [ ] Search over titles and content (the FTS5 schema is already in place)
-- [ ] OPML import and export
-- [ ] One time import from Fluent Reader
+- [x] Search over titles, snippets, authors, and content (FTS5)
+- [x] OPML import and export
+- [x] One-time import from Fluent Reader (`scripts/import-fluent.mjs`)
 - [ ] macOS builds
 
 ## License

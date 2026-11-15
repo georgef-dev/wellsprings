@@ -172,6 +172,27 @@ body {
   display: flex;
   gap: 6px;
   flex-shrink: 0;
+  align-items: center;
+}
+
+.search {
+  border: 1px solid color-mix(in srgb, var(--bg-raised) 80%, transparent);
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  width: 150px;
+  outline: none;
+}
+
+.search:focus {
+  border-color: var(--accent);
+}
+
+.search::placeholder {
+  color: var(--muted);
 }
 
 .toggle {

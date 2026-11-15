@@ -30,3 +30,7 @@ export const setSourceGroup = (sid, gid) => invoke('set_source_group', { sid, gi
 export const renameSource = (sid, name) => invoke('rename_source', { sid, name })
 export const removeSource = (sid) => invoke('remove_source', { sid })
 export const addSource = (url, gid) => invoke('add_source', { url, gid })
+
+export const search = (query, limit = 60) => invoke('search', { query, limit })
+export const exportOpml = () => invoke('export_opml')
+export const importOpml = (text) => invoke('import_opml', { text })

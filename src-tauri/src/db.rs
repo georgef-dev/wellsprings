@@ -1,4 +1,4 @@
-use rusqlite::{params, params_from_iter, Connection};
+use rusqlite::{params, params_from_iter, Connection, OptionalExtension};
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -246,6 +246,37 @@ pub fn list_items(
     })
 }
 
+/// FTS5 search over title, snippet, author, and content. The query is split
+/// into tokens; each is stripped to its alphanumeric characters, lowercased,
+/// and double-quoted so FTS syntax in user input stays literal, and tokens
+/// AND together. The operator words AND/OR/NOT/NEAR are dropped: users type
+/// them as boolean junk, not as words to match.
+pub fn search(conn: &Connection, query: &str, limit: u32) -> Result<ItemsPayload, rusqlite::Error> {
+    const OPERATORS: [&str; 4] = ["and", "or", "not", "near"];
+    let tokens: Vec<String> = query
+        .split_whitespace()
+        .map(|t| t.chars().filter(|c| c.is_alphanumeric()).collect::<String>())
+        .filter(|t| !t.is_empty() && !OPERATORS.contains(&t.to_lowercase().as_str()))
+        .map(|t| format!("\"{}\"", t.to_lowercase()))
+        .collect();
+    if tokens.is_empty() {
+        return Ok(ItemsPayload { items: vec![], has_more: false });
+    }
+    let sql = format!(
+        "SELECT {ITEM_COLUMNS} FROM item_fts f
+         JOIN items i ON i.id = f.rowid
+         JOIN sources s ON s.id = i.source_id
+         WHERE item_fts MATCH ? AND i.hidden = 0
+         ORDER BY rank, i.published_at DESC
+         LIMIT ?"
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt
+        .query_map(params![tokens.join(" "), limit], item_summary_from_row)?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(ItemsPayload { items: rows, has_more: false })
+}
+
 fn group_member_ids(conn: &Connection, gid: i64) -> Result<Vec<i64>, rusqlite::Error> {
     let mut stmt = conn.prepare("SELECT source_id FROM group_sources WHERE group_id = ?")?;
     let ids = stmt.query_map([gid], |r| r.get(0))?.collect::<Result<Vec<_>, _>>()?;
@@ -336,6 +367,11 @@ pub fn reorder_groups(conn: &Connection, ids: &[i64]) -> Result<(), rusqlite::Er
 
 /// One call per feed-row dropdown change: Some(gid) moves the source into that
 /// group, None makes it loose.
+pub fn group_id_by_name(conn: &Connection, name: &str) -> Result<Option<i64>, rusqlite::Error> {
+    conn.query_row("SELECT id FROM groups WHERE name = ?", params![name], |r| r.get(0))
+        .optional()
+}
+
 pub fn set_source_group(conn: &Connection, sid: i64, gid: Option<i64>) -> Result<(), rusqlite::Error> {
     conn.execute("DELETE FROM group_sources WHERE source_id = ?", params![sid])?;
     if let Some(gid) = gid {
@@ -352,10 +388,11 @@ pub fn add_source(
     url: &str,
     name: &str,
     icon: Option<&str>,
+    site_url: Option<&str>,
 ) -> Result<i64, rusqlite::Error> {
     conn.execute(
-        "INSERT INTO sources (url, name, icon_url, site_url, created_at) VALUES (?, ?, ?, NULL, ?)",
-        params![url, name, icon, now_ms()],
+        "INSERT INTO sources (url, name, icon_url, site_url, created_at) VALUES (?, ?, ?, ?, ?)",
+        params![url, name, icon, site_url, now_ms()],
     )?;
     Ok(conn.last_insert_rowid())
 }
@@ -657,11 +694,54 @@ mod tests {
     }
 
     #[test]
+    fn search_matches_across_columns_and_excludes_hidden() {
+        let conn = test_conn();
+        seed(&conn);
+        conn.execute_batch(
+            "UPDATE items SET content = '<p>quokka habitat facts</p>', snippet = 'quokka', author = 'Ada' WHERE id = 100;
+             UPDATE items SET title = 'GAAP rules', snippet = 'second hand' WHERE id = 101;
+             INSERT INTO items (id, source_id, guid, link, title, snippet, published_at, fetched_at, hidden)
+             VALUES (103, 2, 'g-4', 'https://b.example/4', 'Quokka hidden', 'quokka', 500, 500, 1);",
+        )
+        .expect("seed search");
+
+        // Title (case-folded)
+        let hits = search(&conn, "first", 10).expect("title search");
+        assert_eq!(hits.items.iter().map(|i| i.id).collect::<Vec<_>>(), vec![100]);
+
+        // Content and snippet
+        let hits = search(&conn, "quokka", 10).expect("content search");
+        assert_eq!(hits.items.iter().map(|i| i.id).collect::<Vec<_>>(), vec![100]);
+        // The hidden copy of the same word must not surface.
+        assert!(!hits.items.iter().any(|i| i.id == 103));
+
+        // Author
+        let hits = search(&conn, "ada", 10).expect("author search");
+        assert_eq!(hits.items.len(), 1);
+
+        // Multiple tokens AND together: no item is both First and GAAP.
+        assert!(search(&conn, "first gaap", 10).expect("multi token").items.is_empty());
+        // But one item can match both tokens in different columns.
+        assert_eq!(search(&conn, "gaap second", 10).expect("cross column").items.len(), 1);
+
+        // FTS operators and punctuation in the query are stripped, never
+        // executed: AND/OR/NOT drop out as operator words, so raw boolean
+        // junk can neither error nor change the semantics.
+        let hits = search(&conn, "first\")) OR (*", 10).expect("injection");
+        assert_eq!(hits.items.len(), 1);
+        assert!(search(&conn, "first AND second", 10).expect("operator words").items.is_empty());
+
+        // Symbol-only input matches nothing instead of erroring.
+        assert!(search(&conn, "*** (( ", 10).expect("symbols").items.is_empty());
+        assert!(search(&conn, "", 10).expect("empty").items.is_empty());
+    }
+
+    #[test]
     fn feed_lifecycle() {
         let conn = test_conn();
         seed(&conn);
         assert!(!source_url_exists(&conn, "https://x.example/rss").expect("exists"));
-        let sid = add_source(&conn, "https://x.example/rss", "X Blog", None).expect("add");
+        let sid = add_source(&conn, "https://x.example/rss", "X Blog", None, None).expect("add");
         assert!(source_url_exists(&conn, "https://x.example/rss").expect("exists"));
         let feeds = list_feeds(&conn).expect("feeds");
         assert!(feeds.loose.iter().any(|s| s.sid == sid));

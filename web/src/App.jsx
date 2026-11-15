@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import DOMPurify from 'dompurify'
 import { listen } from '@tauri-apps/api/event'
-import { getFeeds, getItems, getItem, patchItem, getTheme, triggerFetch, reorderGroups } from './api'
+import { getFeeds, getItems, getItem, patchItem, getTheme, triggerFetch, reorderGroups, search } from './api'
 import Settings from './Settings'
 
 const PAGE = 50
@@ -185,6 +185,7 @@ export default function App() {
     return ['1', '2', '3', '4'].includes(v) ? v : 'auto'
   })
   const [autoCols, setAutoCols] = useState(1)
+  const [query, setQuery] = useState('')
 
   const listRef = useRef(null)
   const contentCache = useRef(new Map())
@@ -203,6 +204,10 @@ export default function App() {
   scopeRef.current = scope
   const unreadOnlyRef = useRef(unreadOnly)
   unreadOnlyRef.current = unreadOnly
+  const searchRef = useRef(null)
+  const queryRef = useRef(query)
+  queryRef.current = query
+  const searchingRef = useRef(false)
 
   useEffect(() => {
     localStorage.setItem('feeds.cols', cols)
@@ -257,7 +262,42 @@ export default function App() {
     })
   }, [])
 
+  // While a search query is active the grid shows FTS results instead of the
+  // scope list; scope and unread changes are ignored until it is cleared.
   useEffect(() => {
+    const q = query.trim()
+    if (q) {
+      searchingRef.current = true
+      setArticle(null)
+      setSelectedId(null)
+      setLoaded(false)
+      const t = setTimeout(() => {
+        search(q)
+          .then(({ items: next }) => {
+            setItems(next)
+            setHasMore(false)
+            setLoaded(true)
+            setError(null)
+          })
+          .catch((err) => {
+            setLoaded(true)
+            setError(String(err.message || err))
+          })
+      }, 220)
+      return () => clearTimeout(t)
+    }
+    if (searchingRef.current) {
+      searchingRef.current = false
+      setArticle(null)
+      setSelectedId(null)
+      setLoaded(false)
+      setItems([])
+      loadItems()
+    }
+  }, [query, loadItems])
+
+  useEffect(() => {
+    if (queryRef.current.trim()) return
     setArticle(null)
     setSelectedId(null)
     setLoaded(false)
@@ -396,7 +436,22 @@ export default function App() {
     }
     setFetching(false)
     loadFeeds()
-    loadItems()
+    // During an active search, refresh re-runs the query instead of the
+    // scope list, so new items show up without losing the results.
+    if (searchingRef.current) {
+      const q = queryRef.current.trim()
+      if (q) {
+        search(q)
+          .then(({ items: next }) => {
+            setItems(next)
+            setHasMore(false)
+            setLoaded(true)
+          })
+          .catch(() => {})
+      }
+    } else {
+      loadItems()
+    }
   }, [loadFeeds, loadItems])
   const refreshRef = useRef(refresh)
   refreshRef.current = refresh
@@ -468,6 +523,10 @@ export default function App() {
         case 'o':
           open(selectedRef.current)
           break
+        case '/':
+          e.preventDefault()
+          searchRef.current?.focus()
+          break
         case 'Enter':
           if (tag === 'BUTTON') break
           open(selectedRef.current)
@@ -509,8 +568,23 @@ export default function App() {
       <Sidebar feeds={feeds} scope={scope} onSelect={setScope} onReorder={applyGroupOrder} />
       <section className="list-pane">
         <header className="list-head">
-          <h2>{scope.label}</h2>
+          <h2>{query.trim() ? `Search: ${query.trim()}` : scope.label}</h2>
           <div className="tools">
+            <input
+              ref={searchRef}
+              className="search"
+              type="search"
+              placeholder="search (/)"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  e.preventDefault()
+                  setQuery('')
+                  e.target.blur()
+                }
+              }}
+            />
             <div className="seg" title="Columns (A = auto, scales with screen width)">
               {['auto', '1', '2', '3', '4'].map((v) => (
                 <button key={v} className={`seg-btn${cols === v ? ' on' : ''}`} onClick={() => setCols(v)}>
