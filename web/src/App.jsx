@@ -23,9 +23,13 @@ function Icon({ src, name }) {
   return <img className="icon" src={src} alt="" onError={() => setFailed(true)} />
 }
 
-function FeedRow({ label, icon, unread, active, indent, onClick }) {
+function FeedRow({ label, icon, unread, active, indent, dataScope, onClick }) {
   return (
-    <button className={`row${active ? ' active' : ''}${indent ? ' indent' : ''}`} onClick={onClick}>
+    <button
+      className={`row${active ? ' active' : ''}${indent ? ' indent' : ''}`}
+      data-scope={dataScope}
+      onClick={onClick}
+    >
       {icon !== undefined && <Icon src={icon} name={label} />}
       <span className="label">{label}</span>
       {unread > 0 && <span className="badge">{unread > 999 ? '999+' : unread}</span>}
@@ -33,10 +37,10 @@ function FeedRow({ label, icon, unread, active, indent, onClick }) {
   )
 }
 
-function Sidebar({ feeds, scope, onSelect, onReorder }) {
+function Sidebar({ feeds, scope, onSelect, onReorder, navRef, onRowFocus }) {
   const [dragGid, setDragGid] = useState(null)
   const [dropBefore, setDropBefore] = useState(null)
-  if (!feeds) return <nav className="sidebar" />
+  if (!feeds) return <nav className="sidebar" ref={navRef} />
   const dragHandlers = (gid, index) => ({
     draggable: true,
     onDragStart: (e) => {
@@ -62,12 +66,13 @@ function Sidebar({ feeds, scope, onSelect, onReorder }) {
     'data-index': index,
   })
   return (
-    <nav className="sidebar">
+    <nav className="sidebar" ref={navRef} onFocusCapture={onRowFocus}>
       <div className="brand">wellsprings</div>
       <FeedRow
         label="All feeds"
         unread={feeds.totalUnread}
         active={scope.type === 'all'}
+        dataScope="all"
         onClick={() => onSelect({ type: 'all', id: null, label: 'All feeds' })}
       />
       {feeds.groups.map((g, i) => (
@@ -76,6 +81,7 @@ function Sidebar({ feeds, scope, onSelect, onReorder }) {
             label={g.name}
             unread={g.unread}
             active={scope.type === 'group' && scope.id === g.gid}
+            dataScope={`group:${g.gid}`}
             onClick={() => onSelect({ type: 'group', id: g.gid, label: g.name })}
           />
           {g.sids.map((sid) => {
@@ -88,6 +94,7 @@ function Sidebar({ feeds, scope, onSelect, onReorder }) {
                 icon={s.icon}
                 unread={s.unread}
                 active={scope.type === 'source' && scope.id === sid}
+                dataScope={`source:${sid}`}
                 onClick={() => onSelect({ type: 'source', id: sid, label: s.name })}
               />
             ) : null
@@ -117,12 +124,13 @@ function Sidebar({ feeds, scope, onSelect, onReorder }) {
               icon={s.icon}
               unread={s.unread}
               active={scope.type === 'source' && scope.id === s.sid}
+              dataScope={`source:${s.sid}`}
               onClick={() => onSelect({ type: 'source', id: s.sid, label: s.name })}
             />
           ))}
         </div>
       )}
-      <footer className="hints">hjkl move · o open · m read · s star · u unread · r fetch</footer>
+      <footer className="hints">hjkl move · h sidebar · l grid · Enter select · o open · m read · s star · u unread · r fetch</footer>
     </nav>
   )
 }
@@ -189,6 +197,7 @@ export default function App() {
 
   const listRef = useRef(null)
   const contentCache = useRef(new Map())
+  const sideRef = useRef(null)
 
   const feedsRef = useRef(feeds)
   feedsRef.current = feeds
@@ -383,20 +392,40 @@ export default function App() {
   const loadMoreRef = useRef(loadMore)
   loadMoreRef.current = loadMore
 
+  const focusSidebar = useCallback(() => {
+    const rows = [...(sideRef.current?.querySelectorAll('[data-scope]') ?? [])]
+    const s = scopeRef.current
+    const key = s.type === 'all' ? 'all' : `${s.type}:${s.id}`
+    const row = rows.find((r) => r.dataset.scope === key) ?? rows[0]
+    row?.focus({ preventScroll: true })
+    row?.scrollIntoView({ block: 'nearest' })
+  }, [])
+
+  const returnToGrid = useCallback(() => {
+    if (sideRef.current?.contains(document.activeElement)) document.activeElement.blur()
+    const list = itemsRef.current
+    const id = list.some((i) => i._id === selectedRef.current) ? selectedRef.current : list[0]?._id
+    if (id != null) select(id)
+  }, [select])
+
   // Spatial grid navigation: h/j/k/l move between cards left/down/up/right
   // following the row-major card grid. Edges stay put; moving down past the
   // loaded items still triggers load-more and retries.
   const gridMove = useCallback(
     (dir) => {
       const list = itemsRef.current
-      if (!list.length) return
+      const n = articleRef.current ? 1 : (cols === 'auto' ? autoCols : Number(cols)) || 1
       const idx = list.findIndex((i) => i._id === selectedRef.current)
+      if (dir === 'left' && (idx === -1 || idx % n === 0)) {
+        focusSidebar()
+        return
+      }
+      if (!list.length) return
       if (idx === -1) {
         select(list[0]._id)
         if (articleRef.current) loadArticle(list[0]._id)
         return
       }
-      const n = articleRef.current ? 1 : (cols === 'auto' ? autoCols : Number(cols)) || 1
       const col = idx % n
       let next = null
       if (dir === 'left' && col > 0) next = idx - 1
@@ -414,7 +443,7 @@ export default function App() {
       select(list[next]._id)
       if (articleRef.current) loadArticle(list[next]._id)
     },
-    [cols, autoCols, select, loadArticle]
+    [cols, autoCols, select, loadArticle, focusSidebar]
   )
 
   const open = useCallback(
@@ -499,6 +528,49 @@ export default function App() {
         if (e.key === 'Escape') setSettingsOpen(false)
         return
       }
+      const rows = [...(sideRef.current?.querySelectorAll('[data-scope]') ?? [])]
+      const sideIndex = rows.indexOf(document.activeElement)
+      if (sideIndex !== -1) {
+        let target
+        switch (e.key) {
+          case 'j':
+          case 'ArrowDown':
+            target = rows[Math.min(sideIndex + 1, rows.length - 1)]
+            break
+          case 'k':
+          case 'ArrowUp':
+            target = rows[Math.max(sideIndex - 1, 0)]
+            break
+          case 'h':
+          case 'ArrowLeft':
+            target = rows[sideIndex].dataset.scope.startsWith('source:')
+              ? rows[sideIndex].closest('.group')?.querySelector('[data-scope^="group:"]') ?? rows[0]
+              : rows[0]
+            break
+          case 'l':
+          case 'ArrowRight':
+          case 'Escape':
+            e.preventDefault()
+            returnToGrid()
+            return
+          case 'o':
+          case 'Enter':
+          case ' ':
+            e.preventDefault()
+            setQuery('')
+            rows[sideIndex].click()
+            return
+          case 'm':
+          case 's':
+            return // Article actions must not affect a stale grid selection.
+        }
+        if (target) {
+          e.preventDefault()
+          target.focus({ preventScroll: true })
+          target.scrollIntoView({ block: 'nearest' })
+          return
+        }
+      }
       switch (e.key) {
         case 'j':
         case 'ArrowDown':
@@ -559,14 +631,23 @@ export default function App() {
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [gridMove, open, markRead, star])
+  }, [gridMove, open, markRead, star, returnToGrid])
 
   const effectiveCols = article ? 1 : cols === 'auto' ? autoCols : Number(cols)
 
   return (
     <div id="app" className={article ? 'with-article' : ''}>
-      <Sidebar feeds={feeds} scope={scope} onSelect={setScope} onReorder={applyGroupOrder} />
-      <section className="list-pane">
+      <Sidebar
+        feeds={feeds}
+        scope={scope}
+        navRef={sideRef}
+        onSelect={setScope}
+        onRowFocus={(e) => e.target.scrollIntoView({ block: 'nearest' })}
+        onReorder={applyGroupOrder}
+      />
+      <section className="list-pane" onPointerDown={() => {
+        if (sideRef.current?.contains(document.activeElement)) returnToGrid()
+      }}>
         <header className="list-head">
           <h2>{query.trim() ? `Search: ${query.trim()}` : scope.label}</h2>
           <div className="tools">
@@ -618,7 +699,9 @@ export default function App() {
         </div>
       </section>
       {article && (
-        <aside className="article-pane">
+        <aside className="article-pane" onPointerDown={() => {
+          if (sideRef.current?.contains(document.activeElement)) returnToGrid()
+        }}>
           {article.loading ? (
             <div className="empty">loading…</div>
           ) : (
