@@ -41,8 +41,21 @@ React renders the reader. No separate server process is needed to run the deskto
 ## Getting started
 
 > [!NOTE]
-> Wellsprings is in early development, with Linux as the current target.
-> These instructions build it from source. macOS builds are on the roadmap.
+> Wellsprings is in early development. Install a tagged build with the
+> one-liner below, or build from source.
+
+### Quick install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/georgef-dev/wellsprings/main/install.sh | bash
+```
+
+No sudo needed. On Linux, the AppImage lands in `~/.local/bin` with a launcher
+entry and icon; Debian/Ubuntu users who prefer a system package can grab the
+`.deb` from the releases page instead. On macOS, the app lands in
+`~/Applications`. Linux AppImages need FUSE to run, called `libfuse2` on
+Debian/Ubuntu and `fuse2` on Arch. Want to read the script first? Swap
+`| bash` for `| less`.
 
 ### Build and run
 
@@ -60,14 +73,25 @@ npm ci
 npm run tauri dev
 ```
 
-To build a release binary and a Debian package:
+To build a release binary and installers:
 
 ```bash
 npm run tauri build
 ```
 
 Build output is under `src-tauri/target/release/`, with the `.deb` in
-`src-tauri/target/release/bundle/deb/`.
+`src-tauri/target/release/bundle/deb/` and the AppImage in
+`src-tauri/target/release/bundle/appimage/`.
+
+### Or download a build
+
+Tagged versions get draft releases on
+[GitHub Releases](https://github.com/georgef-dev/wellsprings/releases) with a
+`.deb` and an AppImage for Linux, plus macOS `.dmg` files for Apple Silicon
+and Intel. The macOS builds are unsigned (no Apple Developer account yet): on
+first launch, approve the app under **System Settings → Privacy & Security →
+Open Anyway**. If the releases page looks empty, the newest build is still an
+unpublished draft.
 
 ### Make it yours
 
@@ -141,7 +165,8 @@ Read the script's instructions before using it against your library.
 - [x] Full-text search
 - [x] OPML import and export
 - [x] Fluent Reader migration utility
-- [ ] macOS builds
+- [x] CI: tests on pushes to main and pull requests, release builds on tags (Linux and macOS)
+- [ ] Signed and notarized macOS builds (needs an Apple Developer account)
 
 ## Feedback
 
