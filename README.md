@@ -154,17 +154,11 @@ not saved articles or read state.
 Wellsprings doesn't require an account or send telemetry. It connects to feed
 servers to fetch content, and article images and feed icons can load from remote sites.
 
-Coming from Fluent Reader? The repository includes a
-[one-time migration script](scripts/import-fluent.mjs) for its local database.
-It's a developer utility with local path assumptions, not an in-app import wizard.
-Read the script's instructions before using it against your library.
-
 ## Roadmap
 
 - [x] Keyboard navigation across the grid and sidebar
 - [x] Full-text search
 - [x] OPML import and export
-- [x] Fluent Reader migration utility
 - [x] CI: tests on pushes to main and pull requests, release builds on tags (Linux and macOS)
 - [ ] Signed and notarized macOS builds (needs an Apple Developer account)
 

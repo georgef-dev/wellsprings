@@ -6,15 +6,11 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "start": "node server/index.js",
     "tauri": "tauri"
   },
   "dependencies": {
-    "@fastify/static": "^10.1.11",
     "@tauri-apps/api": "^2.12.4",
     "dompurify": "^3.4.17",
-    "fast-xml-parser": "^5.12.1",
-    "fastify": "^5.12.8",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },
