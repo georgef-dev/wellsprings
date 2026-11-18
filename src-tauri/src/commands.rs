@@ -37,6 +37,12 @@ pub fn set_read(state: State<'_, AppState>, id: i64, read: bool) -> Result<bool,
 }
 
 #[tauri::command]
+pub fn mark_all_read(state: State<'_, AppState>, scope: Scope) -> Result<u32, String> {
+    let conn = state.db.lock().map_err(|_| "db lock poisoned".to_string())?;
+    db::mark_all_read(&conn, &scope).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub fn set_starred(state: State<'_, AppState>, id: i64, starred: bool) -> Result<bool, String> {
     let conn = state.db.lock().map_err(|_| "db lock poisoned".to_string())?;
     db::set_starred(&conn, id, starred).map_err(|e| e.to_string())

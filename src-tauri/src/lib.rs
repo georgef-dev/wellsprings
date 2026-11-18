@@ -90,6 +90,8 @@ pub fn run() {
             commands::list_items,
             commands::get_item,
             commands::set_read,
+
+            commands::mark_all_read,
             commands::set_starred,
             commands::search,
             commands::get_theme,

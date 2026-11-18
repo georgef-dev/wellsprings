@@ -17,6 +17,8 @@ export const patchItem = (id, patch) =>
     ? invoke('set_read', { id, read: patch.hasRead })
     : invoke('set_starred', { id, starred: patch.starred })
 
+export const markAllRead = (scope) => invoke('mark_all_read', { scope })
+
 export const triggerFetch = () => invoke('fetch_now')
 
 export const getSettings = () => invoke('get_settings')

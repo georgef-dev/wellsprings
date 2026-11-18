@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import DOMPurify from 'dompurify'
 import { listen } from '@tauri-apps/api/event'
-import { getFeeds, getItems, getItem, patchItem, getTheme, triggerFetch, reorderGroups, search } from './api'
+import { getFeeds, getItems, getItem, patchItem, getTheme, triggerFetch, reorderGroups, search, markAllRead } from './api'
 import Settings from './Settings'
+import Shortcuts from './Shortcuts'
 
 const PAGE = 50
 
@@ -130,7 +131,7 @@ function Sidebar({ feeds, scope, onSelect, onReorder, navRef, onRowFocus }) {
           ))}
         </div>
       )}
-      <footer className="hints">hjkl move · h sidebar · l grid · Enter select · o open · m read · s star · u unread · r fetch</footer>
+      <footer className="hints">hjkl move · h sidebar · l grid · o open · m read · s star · u unread · M mark all · gg/G ends · , settings · ? help · r fetch</footer>
     </nav>
   )
 }
@@ -456,6 +457,35 @@ export default function App() {
     [select, markRead, loadArticle]
   )
 
+  // gg/G: jump to the top or bottom of the loaded list. G stops at the last
+  // loaded item; j keeps paging further down.
+  const jumpListEdge = useCallback(
+    (which) => {
+      const list = itemsRef.current
+      if (!list.length) return
+      const id = which === 'top' ? list[0]._id : list[list.length - 1]._id
+      select(id)
+      if (articleRef.current) loadArticle(id)
+    },
+    [select, loadArticle]
+  )
+
+  // Mark every visible item in the current scope read, then resync the list
+  // and sidebar counts. Any open article belongs to this scope, so it flips
+  // to read in place.
+  const markAllScopeRead = useCallback(async () => {
+    try {
+      await markAllRead(scopeRef.current)
+    } catch {
+      return
+    }
+    loadFeeds()
+    loadItems()
+    setArticle((a) => (a && a.item ? { ...a, item: { ...a.item, hasRead: 1 } } : a))
+  }, [loadFeeds, loadItems])
+  const markAllScopeReadRef = useRef(markAllScopeRead)
+  markAllScopeReadRef.current = markAllScopeRead
+
   const refresh = useCallback(async () => {
     setFetching(true)
     try {
@@ -518,14 +548,30 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const settingsRef = useRef(settingsOpen)
   settingsRef.current = settingsOpen
+  const [helpOpen, setHelpOpen] = useState(false)
+  const helpRef = useRef(helpOpen)
+  helpRef.current = helpOpen
+  const [confirmMarkAll, setConfirmMarkAll] = useState(false)
+  const confirmMarkAllRef = useRef(confirmMarkAll)
+  confirmMarkAllRef.current = confirmMarkAll
+  const pendingGRef = useRef(false) // first press of a g g chord
 
   useEffect(() => {
     const handler = (e) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return
       const tag = e.target?.tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA') return
+      if (e.key !== 'g') pendingGRef.current = false
       if (settingsRef.current) {
         if (e.key === 'Escape') setSettingsOpen(false)
+        return
+      }
+      if (helpRef.current) {
+        if (e.key === 'Escape') setHelpOpen(false)
+        return
+      }
+      if (confirmMarkAllRef.current) {
+        if (e.key === 'Escape') setConfirmMarkAll(false)
         return
       }
       const rows = [...(sideRef.current?.querySelectorAll('[data-scope]') ?? [])]
@@ -627,11 +673,37 @@ export default function App() {
           e.preventDefault()
           refreshRef.current()
           break
+        case ',':
+          e.preventDefault()
+          setSettingsOpen(true)
+          break
+        case '?':
+          e.preventDefault()
+          setHelpOpen(true)
+          break
+        case 'M': {
+          // Bulk action: confirm first, and never run it over search results
+          // (the command marks the whole scope, not just matching items).
+          if (searchingRef.current) break
+          setConfirmMarkAll(true)
+          break
+        }
+        case 'g':
+          if (pendingGRef.current) {
+            pendingGRef.current = false
+            jumpListEdge('top')
+          } else {
+            pendingGRef.current = true
+          }
+          break
+        case 'G':
+          jumpListEdge('bottom')
+          break
       }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [gridMove, open, markRead, star, returnToGrid])
+  }, [gridMove, open, markRead, star, returnToGrid, jumpListEdge])
 
   const effectiveCols = article ? 1 : cols === 'auto' ? autoCols : Number(cols)
 
@@ -745,6 +817,21 @@ export default function App() {
           onChanged={reloadAfterSettings}
           onReorder={applyGroupOrder}
         />
+      )}
+      {helpOpen && <Shortcuts onClose={() => setHelpOpen(false)} />}
+      {confirmMarkAll && (
+        <div className="sheet-backdrop" onMouseDown={(e) => e.target === e.currentTarget && setConfirmMarkAll(false)}>
+          <div className="sheet confirm">
+            <h3>Mark all read</h3>
+            <p className="hint">Mark everything in “{scope.label}” as read?</p>
+            <div className="sheet-actions">
+              <button className="toggle" onClick={() => { setConfirmMarkAll(false); markAllScopeReadRef.current() }}>
+                Mark all read
+              </button>
+              <button className="toggle" onClick={() => setConfirmMarkAll(false)}>Keep unread</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

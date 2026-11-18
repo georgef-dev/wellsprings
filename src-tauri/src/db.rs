@@ -327,6 +327,38 @@ pub fn set_starred(conn: &Connection, id: i64, starred: bool) -> Result<bool, ru
     Ok(n > 0)
 }
 
+/// Marks every unread, non-hidden item in a scope read in a single statement.
+/// The WHERE clause excludes already-read rows, so existing read timestamps
+/// are preserved and the FTS update trigger only fires for rows that change.
+/// Returns the number of items newly marked.
+pub fn mark_all_read(conn: &Connection, scope: &Scope) -> Result<u32, rusqlite::Error> {
+    let mut where_clauses = vec!["hidden = 0".to_string(), "read_at IS NULL".to_string()];
+    let mut args: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+    match scope.kind.as_str() {
+        "source" => {
+            where_clauses.push("source_id = ?".to_string());
+            args.push(Box::new(scope.id.unwrap_or(-1)));
+        }
+        "group" => {
+            where_clauses.push(
+                "source_id IN (SELECT source_id FROM group_sources WHERE group_id = ?)".to_string(),
+            );
+            args.push(Box::new(scope.id.unwrap_or(-1)));
+        }
+        _ => {}
+    }
+    let sql = format!(
+        "UPDATE items SET read_at = ? WHERE {}",
+        where_clauses.join(" AND ")
+    );
+    // Binding order follows the SQL text: the timestamp precedes the WHERE args.
+    let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![Box::new(now_ms())];
+    params.extend(args);
+    let mut stmt = conn.prepare(&sql)?;
+    let n = stmt.execute(params_from_iter(params.iter().map(|a| a.as_ref())))?;
+    Ok(n as u32)
+}
+
 // ---------- feed & group management ----------
 
 pub fn create_group(conn: &Connection, name: &str) -> Result<i64, rusqlite::Error> {
@@ -588,6 +620,73 @@ mod tests {
         let item = get_item(&conn, 101).expect("get").expect("exists");
         assert_eq!(item.starred, 1);
         assert!(!set_read(&conn, 999, true).expect("missing id"));
+    }
+
+    #[test]
+    fn mark_all_read_all_scope_preserves_read_state() {
+        let conn = test_conn();
+        seed(&conn);
+        set_read(&conn, 101, true).expect("pre-read");
+        let original_ts: i64 = conn
+            .query_row("SELECT read_at FROM items WHERE id = 101", [], |r| r.get(0))
+            .expect("ts");
+
+        let n = mark_all_read(&conn, &Scope { kind: "all".into(), id: None }).expect("mark all");
+        assert_eq!(n, 2); // 100 and 102 were unread
+        let unread: i64 = conn
+            .query_row("SELECT COUNT(*) FROM items WHERE read_at IS NULL", [], |r| r.get(0))
+            .expect("unread");
+        assert_eq!(unread, 0);
+        let ts: i64 = conn
+            .query_row("SELECT read_at FROM items WHERE id = 101", [], |r| r.get(0))
+            .expect("ts");
+        assert_eq!(ts, original_ts);
+
+        let again = mark_all_read(&conn, &Scope { kind: "all".into(), id: None }).expect("again");
+        assert_eq!(again, 0); // idempotent
+    }
+
+    #[test]
+    fn mark_all_read_source_and_group_scopes() {
+        let conn = test_conn();
+        seed(&conn);
+        // Group 10 holds source 1 only (items 100, 101); item 102 stays unread.
+        let n = mark_all_read(&conn, &Scope { kind: "group".into(), id: Some(10) }).expect("group");
+        assert_eq!(n, 2);
+        let unread: i64 = conn
+            .query_row("SELECT COUNT(*) FROM items WHERE read_at IS NULL", [], |r| r.get(0))
+            .expect("unread");
+        assert_eq!(unread, 1);
+
+        let conn = test_conn();
+        seed(&conn);
+        let n = mark_all_read(&conn, &Scope { kind: "source".into(), id: Some(2) }).expect("source");
+        assert_eq!(n, 1);
+        let unread: i64 = conn
+            .query_row("SELECT COUNT(*) FROM items WHERE read_at IS NULL", [], |r| r.get(0))
+            .expect("unread");
+        assert_eq!(unread, 2); // source 1 untouched
+
+        let empty = mark_all_read(&conn, &Scope { kind: "group".into(), id: Some(999) }).expect("empty");
+        assert_eq!(empty, 0);
+    }
+
+    #[test]
+    fn mark_all_read_skips_hidden_and_keeps_fts_synced() {
+        let conn = test_conn();
+        seed(&conn);
+        conn.execute("UPDATE items SET hidden = 1 WHERE id = 100", []).expect("hide");
+
+        let n = mark_all_read(&conn, &Scope { kind: "all".into(), id: None }).expect("mark all");
+        assert_eq!(n, 2);
+        let hidden_unread: i64 = conn
+            .query_row("SELECT COUNT(*) FROM items WHERE id = 100 AND read_at IS NULL", [], |r| r.get(0))
+            .expect("hidden unread");
+        assert_eq!(hidden_unread, 1);
+        let fts: i64 = conn
+            .query_row("SELECT COUNT(*) FROM item_fts", [], |r| r.get(0))
+            .expect("fts count");
+        assert_eq!(fts, 3); // update trigger kept the index in sync
     }
 
     #[test]

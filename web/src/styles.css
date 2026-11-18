@@ -680,6 +680,31 @@ body {
   margin-top: 4px;
 }
 
+/* ---------- shortcuts sheet ---------- */
+
+.sheet .keys {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.sheet .keys li {
+  margin: 8px 0;
+}
+
+.sheet kbd {
+  display: inline-block;
+  min-width: 14px;
+  margin: 0 2px;
+  padding: 1px 5px;
+  border: 1px solid color-mix(in srgb, var(--bg-raised) 55%, var(--fg) 20%);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  text-align: center;
+}
+
 /* ---------- group drag & drop ---------- */
 
 .group[draggable='true'] {
