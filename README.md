@@ -85,13 +85,12 @@ Build output is under `src-tauri/target/release/`, with the `.deb` in
 
 ### Or download a build
 
-Tagged versions get draft releases on
-[GitHub Releases](https://github.com/georgef-dev/wellsprings/releases) with a
-`.deb` and an AppImage for Linux, plus macOS `.dmg` files for Apple Silicon
-and Intel. The macOS builds are unsigned (no Apple Developer account yet): on
-first launch, approve the app under **System Settings → Privacy & Security →
-Open Anyway**. If the releases page looks empty, the newest build is still an
-unpublished draft.
+Tagged versions publish releases on
+[GitHub Releases](https://github.com/georgef-dev/wellsprings/releases) once every
+platform build succeeds: a `.deb` and an AppImage for Linux, plus macOS `.dmg`
+files for Apple Silicon and Intel. The macOS builds are unsigned (no Apple
+Developer account yet): on first launch, approve the app under **System
+Settings → Privacy & Security → Open Anyway**.
 
 ### Make it yours
 

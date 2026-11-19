@@ -17,12 +17,12 @@ command -v find >/dev/null 2>&1 || fail "find is required"
 tmpdir="$(mktemp -d)"
 trap 'rm -rf "$tmpdir"' EXIT
 
-# Draft releases are invisible to this endpoint, so a 404 usually means
-# the latest build is still an unpublished draft.
+# The latest-release endpoint only sees published releases, so a 404 usually
+# means the newest build is still running or failed before publishing.
 info "Looking up the latest Wellsprings release..."
 json="$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null || true)"
 if [ -z "$json" ]; then
-  fail "Could not fetch release info from GitHub. Is there a published (not draft) release? See https://github.com/$REPO/releases"
+  fail "Could not fetch release info from GitHub. Has a release been published yet? See https://github.com/$REPO/releases"
 fi
 
 case "$(uname -s)" in
